@@ -1,0 +1,10 @@
+
+
+```bash
+git rm -r --cached node_modules
+git rm --cached .env
+git add .
+git commit -m "Add .gitignore and clean tracked files"
+```
+
+

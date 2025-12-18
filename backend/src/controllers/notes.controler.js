@@ -1,0 +1,123 @@
+import { AsyncHandeler } from "../utils/asyncHandeler.js";
+import { ApiError } from "../utils/ApiError.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { uploadCloudinary } from "../utils/uploadCloudinary.js";
+import mongoose, { Schema } from "mongoose";
+import { Notes } from "../models/notes.model.js";
+
+const uploadNotes = AsyncHandeler(async (req, res) => {
+    const { title, description, author, sem, subject } = req.body
+    if (!title || !description || !author || !sem || !subject) {
+        throw new ApiError(404, "All fields are required...")
+    }
+    const noteLocalPath = req.files?.note[0]?.path;
+    if (!noteLocalPath) {
+        throw new ApiError(404, "Note file is missing...")
+    }
+    const note = await uploadCloudinary(noteLocalPath);
+    if (!note) {
+        throw new ApiError(401, "Something Went Wrong while uploading on cloudinary...")
+    }
+    const noteDetails = await Notes.create({
+        notesFile: note.url,
+        title,
+        description,
+        author,
+        sem,
+        subject : subject.toLowerCase(),
+        woner: req.user._id
+    })
+    if (!noteDetails) {
+        throw new ApiError(401, "Somethig went Wrong while create object...")
+    }
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, noteDetails, "Note Uploaded successfully!")
+        )
+})
+
+const deletDocument = AsyncHandeler(async (req, res) => {
+    const { noteId } = req.body
+    await Notes.deleteOne({
+        _id: new mongoose.Types.ObjectId(noteId)
+    })
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, {}, "Document deleted successfully!")
+        )
+
+})
+
+const getAllNotes = AsyncHandeler(async (req, res) => {
+    const { sem, subject, sortBy } = req.body
+    console.log("sem : ",sem,"subject : ",subject,"sortBy : ",sortBy)
+    let details
+    if (!sem || !subject || !sortBy) {
+        throw new ApiError(404, "Sem or Subject or Sort by is messing...")
+    }
+    if (sem === 'all' && subject === 'all' && sortBy === 'nothing') {
+        console.log("check up 1")
+        details = await Notes.find()
+        if(!details.length){
+            throw new ApiError(401,"Something Went Wrong...")
+        }
+    }
+    else {
+        let sortField = {};
+        sortField[sortBy] = 1;
+        console.log("check up 2")
+        if (subject === 'all' && sem !=='all') {
+            console.log("check up 3")
+            details = await Notes.aggregate([
+                {
+                    $match: {
+                        sem: sem
+                    }
+                },
+                {
+                    $sort: sortField
+                }
+            ])
+            if (!details.length) {
+                throw new ApiError(401, "Something Went wrong...")
+            }
+        }
+        else {
+            console.log("check up 4")
+            details = await Notes.aggregate([
+                {
+                    $match: {
+                        sem: sem
+                    }
+                },
+                {
+                    $match : {
+                        subject: subject
+                    }
+                },
+                {
+                    $sort: sortField
+                }
+            ])
+            if (details.length == 0) {
+                throw new ApiError(401, "Something Went wrong...")
+            }
+        }
+    }
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, details, "Data Founded Successfully...")
+    );
+
+})
+
+
+
+export {
+    uploadNotes,
+    deletDocument,
+    getAllNotes
+}
